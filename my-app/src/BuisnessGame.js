@@ -3,8 +3,23 @@ import Location from './Component/Location';
 import backgroundMusic from './Audio/please-calm-my-mind-125566.mp3'
 import backgroundImage from './Photo/Fone.webp'
 import greenCrystal from './Photo/greenCrystal.png'
+import backgroundImageRev from './Photo/FoneRev.png'
+import menuIcon from './Photo/menuIcon.png'
 
-const BusinessWindow = ({ name, income, onUpgrade, upgradeCost, level, unlocked, onUnlock, unlockCost, multiplier, convertNumberToShortForm }) => {
+const BusinessWindow = ({
+  name,
+  income,
+  onUpgrade,
+  upgradeCost,
+  level,
+  unlocked,
+  onUnlock,
+  unlockCost,
+  multiplier,
+  convertNumberToShortForm,
+  sciencePoints // Предполагаем, что sciencePoints передаются как prop
+}) => {
+  const isFifthUpgrade = (level + 1) % 5 === 0; // Проверяем, является ли следующий уровень пятым
 
   if (!unlocked) {
     return (
@@ -18,25 +33,35 @@ const BusinessWindow = ({ name, income, onUpgrade, upgradeCost, level, unlocked,
   }
 
   return (
-    <div className="bg-gray-700 p-5 rounded-lg shadow-lg">
+    <div style={{ backgroundImage: `url(${backgroundImage})` }} className="bg-gray-700 p-5 rounded-lg shadow-lg">
       <h3 className="text-2xl font-bold mb-4">{name}</h3>
-      <p className="text-xl mb-4">Income: <span className="font-bold">${convertNumberToShortForm(income * multiplier)}</span> per second</p>
+      <p className="text-xl mb-4">Income: <span className="font-bold">${convertNumberToShortForm(income.toFixed(2) * multiplier.toFixed(2))}</span> per second</p>
       <p className="text-xl mb-4">Your Level: <span className="font-bold">{level}</span></p>
       <button 
         className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-110"
         onClick={onUpgrade}
+        disabled={isFifthUpgrade && sciencePoints < 1} // Отключить кнопку, если это пятое улучшение и не хватает очков науки
       >
-        Upgrade for ${convertNumberToShortForm(upgradeCost)}
+        {isFifthUpgrade ? `Upgrade for ${convertNumberToShortForm(upgradeCost.toFixed(2))} and 1 🧪 ` : `Upgrade for ${convertNumberToShortForm(upgradeCost.toFixed(2))}`}
       </button>
     </div>
   );
 };
 
+
 const BuisnessGame = () => {
+  const [balance, setBalance] = useState(() => Number(localStorage.getItem('balance')) || 0);
+  const [income, setIncome] = useState(() => {
+    const savedIncome = localStorage.getItem('income');
+      return savedIncome ? Number(savedIncome) : 1;
+    });
   const resetGame = () => {
-    setPurchasedLocations(0);
+    setTaxes(0);
+    setIsResearching(false);
+    setPurchasedLocations(false);
     setPurchasedUpgrade(false);
-    setGreenCrystals(0);
+    setGreenCrystals(1000);
+    setSciencePoints(0)
     // Сброс состояний до начальных значений
     setBalance(0);
     setIncome(1);
@@ -61,6 +86,67 @@ const BuisnessGame = () => {
     // Очистка localStorage
     localStorage.clear();
   };
+
+
+
+
+  // Функция для начала исследования
+  const startResearch = () => {
+    if (!isResearching) {
+      setIsResearching(true);
+      const startTime = Date.now();
+      const endTime = startTime + researchTimeLeft * 1000;
+      localStorage.setItem('researchEndTime', endTime);
+      beginResearchTimer(endTime); // Вызов функции, которая начнет таймер
+    }
+  };
+  
+  // Функция для установки таймера исследования
+  const beginResearchTimer = (endTime) => {
+    let timer = (endTime - Date.now()) / 1000;
+    const intervalId = setInterval(() => {
+      timer -= 1;
+      setResearchTimeLeft(timer);
+      if (timer <= 0) {
+        clearInterval(intervalId);
+        finishResearch();
+      }
+    }, 1000);
+  };
+  
+  // Функция, которая вызывается, когда исследование завершено
+  const finishResearch = () => {
+    setIsResearching(false);
+    setSciencePoints((prevPoints) => prevPoints + 1); // Начисляем очки науки
+    setResearchTimeLeft(60); // Сброс таймера
+    localStorage.removeItem('researchEndTime'); // Удаляем из localStorage
+  };
+  
+  useEffect(() => {
+    // Восстановление таймера исследования из localStorage при монтировании компонента
+    const savedEndTime = localStorage.getItem('researchEndTime');
+    const currentTime = Date.now();
+  
+    if (savedEndTime && currentTime < savedEndTime) {
+      setIsResearching(true);
+      beginResearchTimer(Number(savedEndTime));
+    }
+    // Очистка интервала при размонтировании компонента
+    return () => {
+      const intervalId = window.setInterval(() => {}, Number.MAX_SAFE_INTEGER);
+      for (let i = 0; i < intervalId; i++) {
+        clearInterval(i);
+      }
+    };
+  }, []);
+
+  // Отображение лаборатории
+  const toggleLab = () => {
+    if (isStoreOpen) setIsStoreOpen(false);
+    if (isMenuOpen) setIsMenuOpen(false);
+    setIsLabOpen(!isLabOpen);
+  };
+
 
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(new Audio(backgroundMusic));
@@ -87,14 +173,18 @@ const BuisnessGame = () => {
 
 
   function convertNumberToShortForm(number) {
-    let suffixes = 'mbtdefghijklnopqrsuvwxyz'.split('');
+    let suffixes = 'ambtdefghijklnopqrsuvwxyz'.split('');
     let suffixIndex = -1;
     let processedNumber = number;
-  
-    while (processedNumber >= 1000000) {
-      processedNumber /= 1000000;
+
+  if (processedNumber >= 999999)  {
+    while (processedNumber >= 1000) {
+      processedNumber /= 1000;
       suffixIndex++;
     }
+  } else {
+    return(number);
+  }
   
     let suffix = suffixIndex === -1 ? '' : suffixes[suffixIndex % suffixes.length];
     // Для суффиксов больше 'z', добавляем дополнительную букву
@@ -119,7 +209,7 @@ const BuisnessGame = () => {
 
     return (
         <>
-        <div key={id} className="bg-gray-600 p-4 rounded-lg shadow-inner">
+        <div key={id} className="bg-gray-600 p-4 rounded-lg shadow-inner mt-2">
           <h3 className="text-lg">{totname}</h3>
           <p>Стоимость: {totcost} $</p>
           <p>Effect: income x2</p>
@@ -149,13 +239,23 @@ const BuisnessGame = () => {
   
 
   const toggleStore = () => {
+    if (isLabOpen) setIsLabOpen(false);
+    if (isMenuOpen) setIsMenuOpen(false);
     setIsStoreOpen(!isStoreOpen);
   };
 
-const [firstBusinessMultiplier, setFirstBusinessMultiplier] = useState(1);
-const [secondBusinessMultiplier, setSecondBusinessMultiplier] = useState(1);
-const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
-
+  const [firstBusinessMultiplier, setFirstBusinessMultiplier] = useState(() => {
+    const savedMultiplier = localStorage.getItem('firstBusinessMultiplier');
+    return savedMultiplier ? Number(savedMultiplier) : 1;
+  });
+  const [secondBusinessMultiplier, setSecondBusinessMultiplier] = useState(() => {
+    const savedMultiplier = localStorage.getItem('secondBusinessMultiplier');
+    return savedMultiplier ? Number(savedMultiplier) : 1;
+  });
+  const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(() => {
+    const savedMultiplier = localStorage.getItem('thirdBusinessMultiplier');
+    return savedMultiplier ? Number(savedMultiplier) : 1;
+  });
   const locations = [
     { id: 1, name: 'Desert', cost: 1000 }
     // Добавьте здесь больше локаций по мере необходимости
@@ -183,8 +283,54 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
     
   ]
 
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [taxes, setTaxes] = useState(() => Number(localStorage.getItem('taxes')) || 0);
+
+// Функция для открытия/закрытия меню
+const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+
+const toggleMenu = (event) => {
+  if (isStoreOpen) setIsStoreOpen(false);
+  if (isLabOpen) setIsLabOpen(false);
+  const rect = event.currentTarget.getBoundingClientRect();
+  setMenuPosition({
+    top: rect.bottom + window.scrollY,
+    left: rect.left + window.scrollX
+  });
+  setIsMenuOpen(!isMenuOpen);
+};
+
+// Эффект для начисления налогов
+useEffect(() => {
+  const handleTaxCalculation = () => {
+    setTaxes((currentTaxes) => currentTaxes + income * 0.2);
+  };
+
+  // Запустите начисление налогов сразу при монтировании компонента
+  handleTaxCalculation();
+
+  // Установите интервал на каждую минуту, а не каждую секунду
+  const taxInterval = setInterval(handleTaxCalculation, 1000); // 60000 миллисекунд = 1 минута
+
+  // Очистите интервал при размонтировании компонента
+  return () => clearInterval(taxInterval);
+}, [income]); // Перезапускаем интервал, если баланс изменился
+
+// Функция для оплаты налогов
+const payTaxes = () => {
+  setBalance((currentBalance) => {
+    if (currentBalance >= taxes) {
+      setTaxes(0); // Сбросить налоги после оплаты
+      return currentBalance - taxes;
+    } else {
+      alert("Недостаточно средств для оплаты налогов!");
+      return currentBalance; // Возвращаем текущий баланс, если средств недостаточно
+    }
+  });
+};
+
   const convertBalanceToGreenCrystals = () => {
-    const conversionRate = 10000; // Курс обмена
+    const conversionRate = 1000000; // Курс обмена
     const newGreenCrystals = balance / conversionRate;
     setGreenCrystals(currentGreenCrystals => currentGreenCrystals + newGreenCrystals);
     setBalance(0); // Обнуляем balance после конвертации
@@ -193,12 +339,27 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
 
   const purchaseUpgrade = (id, cost) => {
     if (balance >= cost) {
-      setBalance(currentBalance => currentBalance - cost);
-      setPurchasedUpgrade(prev => ({ ...prev, [id]: true }));
+      // Обновляем баланс
+      setBalance(currentBalance => {
+        const newBalance = currentBalance - cost;
+        localStorage.setItem('balance', newBalance.toString());
+        return newBalance;
+      });
+    
+      // Обновляем апгрейды
+      setPurchasedUpgrade(prev => {
+        const updatedUpgrades = { ...prev, [id]: true };
+        localStorage.setItem('purchasedUpgrade', JSON.stringify(updatedUpgrades));
+        return updatedUpgrades;
+      });
       
       // Определите, какой бизнес нужно улучшить на основе id улучшения
-      if (id === 2) {
-        setFirstBusinessMultiplier(prev => prev * 2); // Например, удваиваем доход
+      if (id === 2) { // Предполагаем, что id 2 относится к первому бизнесу
+        setFirstBusinessMultiplier(prevMultiplier => {
+          const newMultiplier = prevMultiplier * 2;
+          // Здесь вы также можете сохранить этот новый множитель в localStorage, если это необходимо
+          return newMultiplier;
+        });
       } else if (id === 3) {
         setSecondBusinessMultiplier(prev => prev * 2);
       } else if (id === 4) {
@@ -216,15 +377,29 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
   };
 
   const purchaseLocation = (id, cost) => {
+    // Assuming taxes is a state variable that is updated elsewhere in the application.
     if (greenCrystals >= cost) {
+      if (taxes >= 1000000) {
+        alert('Your taxes are too high, please pay before purchasing a location!');
+        return; // Exit the function early if taxes are too high
+      }
       setGreenCrystals(currentGreenCrystals => currentGreenCrystals - cost);
-      setPurchasedLocations(prev => ({ ...prev, [id]: true }));
+      setPurchasedLocations(prevLocations => {
+        const updatedLocations = { ...prevLocations, [id]: true };
+        localStorage.setItem('purchasedLocations', JSON.stringify(updatedLocations));
+        return updatedLocations;
+      });
     } else {
       alert('Not enough green crystals to purchase!');
     }
-  };
+};
   //valuta green crystals
+  const [isLabOpen, setIsLabOpen] = useState(false);
+  const [isResearching, setIsResearching] = useState(false);
 
+
+  const [researchTimeLeft, setResearchTimeLeft] = useState(60); // Время в секундах
+  const [sciencePoints, setSciencePoints] = useState(() => Number(localStorage.getItem('sciencePoints')) || 0);
   //const [isPlaying, setIsPlaying] = useState(false);
 
   const [purchasedUpgrade, setPurchasedUpgrade] = useState(() => {
@@ -232,10 +407,13 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
     return saved ? JSON.parse(saved) : {};
   });
   const [greenCrystals, setGreenCrystals] = useState(() => Number(localStorage.getItem('greenCrystals')) || 0);
-  const [purchasedLocations, setPurchasedLocations] = useState({});
+  const [purchasedLocations, setPurchasedLocations] = useState(() => {
+    const savedLocations = localStorage.getItem('purchasedLocations');
+    return savedLocations ? JSON.parse(savedLocations) : {};
+  });
   //first bussiness
-  const [balance, setBalance] = useState(() => Number(localStorage.getItem('balance')) || 0);
-  const [income, setIncome] = useState(() => Number(localStorage.getItem('income')) || 1);
+  
+  
   const [upgradeCost, setUpgradeCost] = useState(() => Number(localStorage.getItem('upgradeCost')) || 10);
   const [upgradeCount, setUpgradeCount] = useState(() => Number(localStorage.getItem('upgradeCount')) || 0);
 
@@ -257,7 +435,13 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
   useEffect(() => {
     // Сохранение текущего состояния в localStorage
     const saveState = () => {
+      localStorage.setItem('sciencePoints', sciencePoints.toString());
+
+      localStorage.setItem('firstBusinessMultiplier', firstBusinessMultiplier.toString());
+      localStorage.setItem('secondBusinessMultiplier', secondBusinessMultiplier.toString());
+      localStorage.setItem('thirdBusinessMultiplier', thirdBusinessMultiplier.toString());
       localStorage.setItem('purchasedUpgrade', JSON.stringify(purchasedUpgrade));
+      localStorage.setItem('taxes', JSON.stringify(taxes));
 
       localStorage.setItem('purchasedLocations', JSON.stringify(purchasedLocations));
       localStorage.setItem('greenCrystals', greenCrystals.toString());
@@ -280,7 +464,7 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
 
     // Вызов сохранения состояния при изменении любого из состояний
     saveState();
-  }, [balance, income, upgradeCost, upgradeCount, secondWindowUnlocked, secondIncome, secUpgradeCost, secUpgradeCount, thirdWindowUnlocked, thirdIncome, thirdUpgradeCost, thirdUpgradeCount, greenCrystals, purchasedLocations, purchasedUpgrade]);
+  }, [balance, income, upgradeCost, upgradeCount, taxes, secondWindowUnlocked, secondIncome, sciencePoints, secUpgradeCost, secUpgradeCount, thirdWindowUnlocked, thirdIncome, thirdUpgradeCost, thirdUpgradeCount, greenCrystals, purchasedLocations, purchasedUpgrade, secondBusinessMultiplier, firstBusinessMultiplier, thirdBusinessMultiplier]);
 
     useEffect(() => {
   const interval = setInterval(() => {
@@ -296,23 +480,34 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
 }, [income, firstBusinessMultiplier, secondIncome, secondBusinessMultiplier, thirdIncome, thirdBusinessMultiplier]);
 
     const purshcaseUpgrade = () => {
-      if (balance >= upgradeCost) {
-        setIncome(currentIncome => currentIncome * 1.5);
-        setBalance(currentBalance => currentBalance - upgradeCost)
-        setUpgradeCount(upgradeCount => upgradeCount + 1);
+      const isFifthUpgrade = (upgradeCount + 1) % 5 === 0; // Проверяем, является ли это пятым улучшением
 
-        setUpgradeCost(currentCost => currentCost * 2);
+  if (balance >= upgradeCost && (!isFifthUpgrade || (isFifthUpgrade && sciencePoints > 0))) {
+    setIncome(currentIncome => currentIncome * 1.5); // Увеличиваем доход
+    setBalance(currentBalance => currentBalance - upgradeCost); // Уменьшаем баланс на стоимость улучшения
+    setUpgradeCount(upgradeCount => upgradeCount + 1); // Увеличиваем счётчик улучшений
 
-        if ((upgradeCount + 1) % 5 === 0) {
-          setIncome(currentIncome => currentIncome * 1.2);
-        }
-        if ((upgradeCount + 1) % 10 === 0) {
-          setIncome(currentIncome => currentIncome * 1.3);
-        }
-      } else {
-        alert("Balance not enough!");
-      }
-    };
+    setUpgradeCost(currentCost => currentCost * 2); // Увеличиваем стоимость следующего улучшения
+
+    if (isFifthUpgrade) {
+      // Если это пятое улучшение, уменьшаем количество очков науки
+      setSciencePoints(currentPoints => currentPoints - 1);
+      setIncome(currentIncome => currentIncome * 1.2); // Дополнительное увеличение дохода
+    }
+
+    if ((upgradeCount + 1) % 10 === 0) {
+      // Каждое десятое улучшение увеличиваем доход еще больше
+      setIncome(currentIncome => currentIncome * 1.3);
+    }
+  } else {
+    // Если средств недостаточно или не хватает очков науки для пятого улучшения
+    let errorMessage = "Balance not enough!";
+    if (isFifthUpgrade && sciencePoints === 0) {
+      errorMessage = "Not enough science points  for this upgrade!";
+    }
+    alert(errorMessage);
+  }
+};
 
     const unlockSecondWindow = () => {
       
@@ -337,7 +532,9 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
     };
      
     const secPurshcaseUpgrade = () => {
-      if (balance >= secUpgradeCost) {
+      const isFifthUpgrade = (secUpgradeCount + 1) % 5 === 0; // Проверяем, является ли это пятым улучшением
+
+      if (balance >= secUpgradeCost && (!isFifthUpgrade || (isFifthUpgrade && sciencePoints > 0))) {
         setSecondIncome(currentsecondIncome => currentsecondIncome * 1.7 + 10);
         setBalance(prevBalance => prevBalance - secUpgradeCost);
         setSecUpgradeCount(secUpgradeCount + 1);
@@ -352,13 +549,25 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
         if ((secUpgradeCount + 1) % 100 === 0){
           setSecondIncome(currentsecondIncome => currentsecondIncome * 1.5);
         }
+        if (isFifthUpgrade) {
+          // Если это пятое улучшение, уменьшаем количество очков науки
+          setSciencePoints(currentPoints => currentPoints - 1);
+          setIncome(currentIncome => currentIncome * 1.2); // Дополнительное увеличение дохода
+        }
     } else {
-      alert("balance not enough!");
+      let errorMessage = "Balance not enough!";
+      if (isFifthUpgrade && sciencePoints === 0) {
+      errorMessage = "Not enough science points  for this upgrade!";
+    }
+    alert(errorMessage);
     }
   };
 
   const thirdPurshcaseUpgrade = () => {
-    if (balance >= thirdUpgradeCost) {
+
+    const isFifthUpgrade = (thirdUpgradeCost + 1) % 5 === 0; // Проверяем, является ли это пятым улучшением
+
+      if (balance >= thirdUpgradeCost && (!isFifthUpgrade || (isFifthUpgrade && sciencePoints > 0))) {
       setThirdIncome(currentthirdIncome => currentthirdIncome * 2 + 100);
       setBalance(prevBalance => prevBalance - thirdUpgradeCost);
       setThirdUpgradeCount(thirdUpgradeCount + 1);
@@ -373,27 +582,90 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
       if ((secUpgradeCount + 1) % 100 === 0){
         setThirdIncome(currentthirdIncome => currentthirdIncome * 1.5);
       }
+      if (isFifthUpgrade) {
+        // Если это пятое улучшение, уменьшаем количество очков науки
+        setSciencePoints(currentPoints => currentPoints - 1);
+        setIncome(currentIncome => currentIncome * 1.2); // Дополнительное увеличение дохода
+      }
   } else {
-    alert("balance not enough!");
+    let errorMessage = "Balance not enough!";
+      if (isFifthUpgrade && sciencePoints === 0) {
+      errorMessage = "Not enough science points  for this upgrade!";
+    }
+    alert(errorMessage);
     }
   }
 
     return (
       <>
-      <div style={{ backgroundImage: `url(${backgroundImage})` }} className="min-h-screen bg-gray-800 text-white flex flex-col items-center justify-center">
-      <div className="absolute right-0 top-0 m-4 flex items-center space-x-2">
-      <button onClick={toggleStore} className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-  Магазин
+      <div style={{ backgroundImage: `url(${backgroundImage})` }} className=" relative min-h-screen bg-gray-800 text-white flex flex-col items-center justify-center">
+
+      <div className="absolute top-0 left-0 m-4 z-50">
+  <button className="p-2" onClick={toggleMenu}>
+    {/* Иконка гамбургера */}
+    <img
+      src={menuIcon} // Путь к иконке гамбургера
+      alt="Menu"
+      className="h-9 w-9"
+    />
+  </button>
+</div>
+
+{/* Контейнер для кнопок 'Магазин', 'Лаборатория', и звука */}
+<div className="absolute top-0 right-0 m-4 flex items-center space-x-2 z-50">
+  <button onClick={toggleStore} className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+    Магазин
+  </button>
+  <button onClick={toggleLab} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+    Лаборатория
+  </button>
+  <button onClick={toggleSound} className="w-10 h-10 flex items-center justify-center rounded-full bg-green-500 text-white font-bold text-2xl border-2 border-green-500">
+    {isPlaying ? '🔊' : '🔇'}
+  </button>
+</div>
+        
+        
+        {isLabOpen && (
+          <div className="absolute right-0 mt-5 top-14 mr-4 bg-gray-700 p-5 rounded-lg shadow-lg" style={{ zIndex: 100, maxHeight: '500px', overflowY: 'auto', width: '400px', backgroundImage: `url(${backgroundImage})` }}>
+            <h2 className="text-xl mb-2">Лаборатория</h2>
+            <p className='mb-2'>{sciencePoints}🧪</p>
+            <button
+  onClick={startResearch}
+  disabled={isResearching}
+  className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+>
+  {isResearching ? `Идет исследование ${researchTimeLeft.toFixed(0)} сек` : 'Начать исследование'}
 </button>
-<button onClick={toggleSound} className={`ml-4 w-10 h-10 flex items-center justify-center rounded-full bg-green-500 text-white font-bold text-2xl border-2 border-green-500 transition duration-300 ease-in-out`}>
-          {isPlaying ? '🔊' : '🔇'}
+          </div>
+        )}
+
+  {isMenuOpen && (
+  <div className="absolute z-10 p-5 bg-gray-600 rounded shadow-lg ml-2" style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px`, backgroundImage: `url(${backgroundImageRev})`}} >
+    <h2 className="text-xl mb-2 mt-2">Меню</h2>
+      <div className="bg-gray-600 p-5 rounded shadow-xl">
+        <p>Налоги: ${taxes.toFixed(2)}</p>
+        <button
+          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded my-2"
+          onClick={payTaxes}
+        >
+          Оплатить налоги
         </button>
-        </div>
+        {/* ...Контент для раздела Имущество... */}
+        <button
+          className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded ml-2"
+          onClick={toggleMenu}
+        >
+          Закрыть
+        </button>
+      </div>
+    </div>
+  )}
+
 {isStoreOpen && (
-  <div style={{zIndex: 100, maxHeight: '500px', overflowY: 'auto', width: '400px'}}className="bg-gray-700 p-5 rounded-lg shadow-lg mt-5 absolute right-0 top-14 mr-4">
+  <div style={{zIndex: 100, maxHeight: '500px', overflowY: 'auto', width: '400px', backgroundImage: `url(${backgroundImage})`}}className="bg-gray-700 p-5 rounded-lg shadow-lg mt-5 absolute right-0 top-14 mr-4">
   <h2 className="text-xl mb-4">Магазин локаций</h2>
   <div className="flex items-center mb-4">
-  <img src={greenCrystal} alt="Green Crystal" className="inline-block h-6 w-6" /> <span className="font-bold">{greenCrystals}</span>
+  <img src={greenCrystal} alt="Green Crystal" className="inline-block h-6 w-6" /> <span className="font-bold">{greenCrystals.toFixed(4)}</span>
   </div>
   <button onClick={convertBalanceToGreenCrystals} className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-110 mb-4">
     Конвертировать баланс в <img src={greenCrystal} alt="Green Crystal" className="inline-block h-6 w-6" />
@@ -429,7 +701,7 @@ const [thirdBusinessMultiplier, setThirdBusinessMultiplier] = useState(1);
 )}
       <button onClick={resetGame} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-300 ease-in-out transform hover:scale-110">Start Over</button>
       <h1 className="text-4xl font-bold mb-6">Business Game</h1>
-      <p className="text-xl mb-2">Balance: <span className="font-bold">${convertNumberToShortForm(balance)}</span></p>
+      <p className="text-xl mb-2">Balance: <span className="font-bold">${convertNumberToShortForm(balance.toFixed(2))}</span></p>
       <div className="flex flex-wrap justify-center gap-4">
         <BusinessWindow
           name="First Bussiness"
